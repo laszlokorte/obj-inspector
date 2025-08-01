@@ -1,0 +1,28 @@
+{
+  "name": "renew-inspector",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Laszlo Korte",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@budarin/vite-plugin-webmanifest": "^1.0.12",
+    "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "vite": "^5.3.1",
+    "vite-plugin-pwa": "^1.0.0"
+  },
+  "dependencies": {
+    "@petristation/renewjs": "^1.0.3",
+    "@svatom/basic": "^1.0.6",
+    "@svatom/threedee": "^1.0.5",
+    "partial.lenses": "^14.17.0",
+    "ramda": "^0.30.1",
+    "regl": "^2.1.1",
+    "svelte": "^5.37.2"
+  }
+}
