@@ -45,6 +45,7 @@
 	const textPerspective = view("perspective", textRendering);
 
 	const showSvg = view("svg", debugLabels);
+	const showOrigin = view("origin", debugLabels);
 	const showCanvas = view("canvas", debugLabels);
 	const labelFace = view("face", debugLabels);
 	const labelVertex = view("vertex", debugLabels);
@@ -363,6 +364,9 @@
 			>
 			<label class="checkbox-list-item"
 				><input type="checkbox" bind:checked={alphaBlend.value} /> <span class="checkbox-list-item-label">Alpha Blend</span></label
+			>
+			<label class="checkbox-list-item"
+				><input type="checkbox" bind:checked={showOrigin.value} /> <span class="checkbox-list-item-label">Show Origin</span></label
 			>
 			</div>
 		</fieldset>

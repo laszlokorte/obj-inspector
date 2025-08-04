@@ -1483,8 +1483,10 @@
 		vertex: false,
 		ndcCube: false,
 		screenTriangle: false,
+		origin: false,
 	});
 	const showSvg = view("svg", debugLabels);
+	const showOrigin = view("origin", debugLabels);
 	const showCanvas = view("canvas", debugLabels);
 	const labelFace = view("face", debugLabels);
 	const labelVertex = view("vertex", debugLabels);
@@ -2163,29 +2165,32 @@
 	            	}
 	            }, arrowDrawers)
 
-	            axisDrawer({
-		              segments: axisMeshTip,
-		              model: identitiy4x4,
-		              color: [0.4,0.4,0.4,1],
-		              width: strokeWidthFg.value * window.devicePixelRatio * 2,
-		              depth: false,
-		              depthFunc: 'gequal',
-		              cullEnabled: false,
-		              modelMatrixNormal: identity3x3,
-		              depthOffsetFactor: strokeWidthFg.value,
-		         })
+	            if(showOrigin.value) {
+	            	
+		            axisDrawer({
+			              segments: axisMeshTip,
+			              model: identitiy4x4,
+			              color: [0.4,0.4,0.4,1],
+			              width: strokeWidthFg.value * window.devicePixelRatio * 2,
+			              depth: false,
+			              depthFunc: 'gequal',
+			              cullEnabled: false,
+			              modelMatrixNormal: identity3x3,
+			              depthOffsetFactor: strokeWidthFg.value,
+			         })
 
-	            drawLine3D({
-		              segments: axisMesh,
-		              model: identitiy4x4,
-		              color: [0.4,0.4,0.4,1],
-		              width: strokeWidthFg.value * window.devicePixelRatio * 2,
-		              depth: false,
-		              depthFunc: 'gequal',
-		              cullEnabled: false,
-		              modelMatrixNormal: identity3x3,
-		              depthOffsetFactor: strokeWidthFg.value,
-		         })
+		            drawLine3D({
+			              segments: axisMesh,
+			              model: identitiy4x4,
+			              color: [0.4,0.4,0.4,1],
+			              width: strokeWidthFg.value * window.devicePixelRatio * 2,
+			              depth: false,
+			              depthFunc: 'gequal',
+			              cullEnabled: false,
+			              modelMatrixNormal: identity3x3,
+			              depthOffsetFactor: strokeWidthFg.value,
+			         })
+	            }
 	           
 	            drawLine3D({
 	              segments: reglVertexMesh,
