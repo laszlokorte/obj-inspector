@@ -22,11 +22,13 @@
 	} from "./svatom.svelte.js";
 	import { parserAutoDetect, kindKey, selfKey, refKey } from "@petristation/renewjs";
 	import exampleMesh, { cubeB } from "@svatom/threedee/exampleMesh";
+
 	import {
 		parse as parseObj,
 		toGeo,
 	} from "@svatom/threedee/obj";
 	import * as renew from "../data/renew";
+	import * as objData from "../data/obj";
 	import {
 		renewToGeo,
 	} from "./renewObj.js";
@@ -36,10 +38,43 @@
 	} from "@svatom/threedee/marchingCubes";
 
 	const objs = {
+		initial: {
+			label: "Initial",
+			geo: cubeB,
+		},
+		cube: { label: "Cube", data: objData.cube, scale: 20 },
+		monkey: {
+			label: "Suzanne",
+			data: objData.monkey,
+			scale: 20,
+			scaleX: -1,
+			scaleY: -1,
+		},
+		torus: { label: "Torus", data: objData.torus, scale: 5 },
 		renew1: { label: "Renew #1", renew: renew.exampleRenew, scale: 5 },
 		renew2: { label: "Renew #2", renew: renew.exampleDoubleArrow, scale: 5 },
 		renew3: { label: "Renew #3", renew: renew.exampleEightPhil, scale: 5 },
 		renew4: { label: "Renew #4", renew: renew.exampleCloseDoor, scale: 5 },
+		marching: { label: "Marching Cubes", geo: marchingCubesToGeo(
+			(x, y, z) => (3*x * x/100 + 4*y * y/100 + 1.5*z * z/100) - Math.cos(z*Math.PI/10)*45 - Math.cos(x*Math.PI/12)*20 - Math.cos(y*Math.PI/14)*40,
+			-10,
+			-10,
+			-10,
+			10,
+			10,
+			10,
+			8,
+		), scale: 40 },
+		gauss: { label: "Gauss", geo: marchingCubesToGeo(
+			(x, y, z) => -y*2 - (2 * Math.PI * Math.exp(-(x*x + z*z) / 8 / Math.PI)),
+			-12,
+			-12,
+			-12,
+			12,
+			12,
+			12,
+			24,
+		), scale: 40 },
 	};
 
 	const renewExamples = fetch("https://renew.laszlokorte.de/")
@@ -68,9 +103,9 @@
 			eye: {
 				tx: 0,
 				ty: 0,
-				tz: 30,
-				rx: (33 / 180) * Math.PI,
-				ry: -(33 / 180) * Math.PI,
+				tz: 180,
+				rx: 0.1,
+				ry: 0,
 				rz: 0,
 				sx: 1,
 				sy: 1,
@@ -78,8 +113,8 @@
 			},
 			offset: {
 				x: 0,
-				y: -10,
-				z: 130,
+				y: 0,
+				z: 180,
 			},
 		}),
 		screen = atom({
@@ -532,12 +567,12 @@
 	const worldTransform = atom({
 		tx: 0,
 		ty: 0,
-		tz: -100,
+		tz: 0,
 		rx: 0,
 		ry: 0,
 		rz: 0,
-		sx: 1.1,
-		sy: 1.2,
+		sx: 1,
+		sy: 1,
 		sz: 1,
 	});
 	const meshColor = atom("#5fdfb4");
@@ -1700,6 +1735,7 @@
 	}
 
 
+	const axisArrow = S.arrowGeometry(4);
 	const arrowGeometries = {
 		"CH.ifa.draw.figures.ArrowTip": S.arrowGeometry(4),
 		"de.renew.gui.CircleDecoration": S.circleCapGeometry(5, 10),
@@ -1733,6 +1769,7 @@
 		})
 
 		const arrowDrawers = R.mapObjIndexed((geo, arrow) => S.interleavedStrip3D(regl, geo), arrowGeometries)
+		const axisDrawer = S.interleavedStrip3D(regl, axisArrow)
 
         const drawLine3D = S.interleavedStrip3D(regl, roundLineGeo)
         const drawFace3D = S.makeColorShader(regl)
@@ -1815,6 +1852,26 @@
         	count: 0
 		}), arrowGeometries)
 
+		const axisMeshTip = ({
+			points: regl.buffer([0,0,0,1.4,0,0, 0,0,0,0,1.2,0, 0,0,0,0,0,1]),
+        	normals: regl.buffer([0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0]),
+        	shortenings: regl.buffer([0,0,0,0,0,0]),
+        	count: 3
+		})
+
+		const axisMesh = ({
+			points: regl.buffer([0,0,0,1.4,0,0, 0,0,0,0,1.2,0, 0,0,0,0,0,1]),
+        	normals: regl.buffer([0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0]),
+        	shortenings: regl.buffer([1.5,6,1.5,6,1.5,6]),
+        	count: 3
+		})
+
+		const identitiy4x4 = M.makeIdentity()
+		const identity3x3 = [
+					    1, 0, 0,
+					    0, 1, 0,
+					    0, 0, 1,
+					  ]
 
         let reglVertexMesh = {
         	points: regl.buffer([]),
@@ -2105,6 +2162,30 @@
 				         })
 	            	}
 	            }, arrowDrawers)
+
+	            axisDrawer({
+		              segments: axisMeshTip,
+		              model: identitiy4x4,
+		              color: [0.4,0.4,0.4,1],
+		              width: strokeWidthFg.value * window.devicePixelRatio * 2,
+		              depth: false,
+		              depthFunc: 'gequal',
+		              cullEnabled: false,
+		              modelMatrixNormal: identity3x3,
+		              depthOffsetFactor: strokeWidthFg.value,
+		         })
+
+	            drawLine3D({
+		              segments: axisMesh,
+		              model: identitiy4x4,
+		              color: [0.4,0.4,0.4,1],
+		              width: strokeWidthFg.value * window.devicePixelRatio * 2,
+		              depth: false,
+		              depthFunc: 'gequal',
+		              cullEnabled: false,
+		              modelMatrixNormal: identity3x3,
+		              depthOffsetFactor: strokeWidthFg.value,
+		         })
 	           
 	            drawLine3D({
 	              segments: reglVertexMesh,
@@ -2131,9 +2212,63 @@
 	    obj
 	  )
 	);
+
+	const dragging = atom(0);
+	const onDragOver = (evt) => {
+		if (evt.dataTransfer.items.length < 1) {
+			dragging.value = 0;
+			return;
+		}
+		evt.preventDefault();
+		evt.dataTransfer.dropEffect = "copy";
+	};
+
+	const onDragEnter = (evt) => {
+		if (evt.dataTransfer.items.length < 1) {
+			return;
+		}
+		evt.preventDefault();
+		dragging.value += 1;
+	};
+
+	const onDragLeave = (evt) => {
+		evt.preventDefault();
+		dragging.value -= 1;
+	};
+
+	const reader = new FileReader();
+	reader.onload = (evt) => {
+		worldGeo.value = toGeo(
+			parseObj(evt.target.result),
+			1,
+			true,
+			1,
+			1,
+			1,
+		)
+	};
+
+	const onDragDrop = (evt) => {
+		evt.preventDefault();
+		dragging.value = 0;
+
+		if (evt.dataTransfer.files.length === 1) {
+			reader.readAsText(evt.dataTransfer.files[0]);
+		}
+	};
 </script>
 
-<div class="screen">
+<div		class={[
+				"screen",
+				"drop-target",
+				{
+					dragging: dragging.value > 0,
+				},
+			]}
+	ondragover={onDragOver}
+	ondragenter={onDragEnter}
+	ondragleave={onDragLeave}
+	ondrop={onDragDrop}>
 
 <div class="overlay overlay-top">
 	<fieldset>
@@ -2141,7 +2276,6 @@
 
 			<div>
 				<select
-					size="4"
 					style="width: 100%;"
 					onchange={(evt) => {
 						const obj = objs[evt.currentTarget.value];
@@ -2170,13 +2304,7 @@
 						<option value={k}>{v.label}</option>
 					{/each}
 				</select>
-			</div>
 
-		</fieldset>
-
-
-		<fieldset>
-			<legend>Load Renew Document</legend>
 
 			{#await renewExamples then { files }}
 					<label>
@@ -2220,12 +2348,12 @@
 						{/each}
 					</select>
 					</label>
-				{:catch}
-					<em style="color: #aaa"
-						>Or Drop Renew Files from your own PC into the text field</em
-					>
 				{/await}
+			</div>
+
 		</fieldset>
+
+
 </div>
 
 <div class="fullscreen">
@@ -2842,4 +2970,14 @@
 		stroke-opacity: 0.5;
 		stroke-width: var(--stroke-width-bg, 8);
 	}
+
+
+	.drop-target {
+		border: 0.5em solid transparent;
+	}
+
+	.drop-target.dragging {
+		border-color: lime;
+	}
+
 </style>

@@ -131,6 +131,7 @@
 
 	<div class="wrapper">
 	<div>
+		<!--
 		<fieldset>
 			<legend>Plane Triangle</legend>
 			<label class="number-picker"
@@ -196,7 +197,7 @@
 				>
 			</label>
 		</fieldset>
-
+	-->
 		<fieldset>
 			<legend>Object</legend>
 
@@ -476,7 +477,7 @@
 	</div>
 
 	<div>
-		<fieldset>
+		<!--<fieldset>
 			<legend>View</legend>
 
 			<label class="number-picker"
@@ -492,7 +493,7 @@
 					>({numf.format(inset.value)})</output
 				>
 			</label>
-		</fieldset>
+		</fieldset>-->
 		<fieldset>
 			<legend>Camera</legend>
 
@@ -638,8 +639,8 @@
 							<input
 								type="range"
 								class="number-picker-slider"
-								min="-100"
-								max="100"
+								min="-200"
+								max="200"
 								step="0.001"
 								bind:value={cameraOffsetX.value}
 							/><output class="number-picker-value ro"
@@ -651,8 +652,8 @@
 							<input
 								type="range"
 								class="number-picker-slider"
-								min="-100"
-								max="100"
+								min="-200"
+								max="200"
 								step="0.001"
 								bind:value={cameraOffsetY.value}
 							/><output class="number-picker-value ro"
@@ -664,8 +665,8 @@
 							<input
 								type="range"
 								class="number-picker-slider"
-								min="-100"
-								max="100"
+								min="-200"
+								max="200"
 								step="0.001"
 								bind:value={cameraOffsetZ.value}
 							/><output class="number-picker-value ro"
