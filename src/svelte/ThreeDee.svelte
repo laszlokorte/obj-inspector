@@ -303,11 +303,17 @@
 	const screenCropOuter  = view(["outer", L.props("x","y","width","height"),L.defaults({})], screenCrop);
 
 	const cropMovement = read(({inner, outer}) => {
-		const x = (inner.x-outer.x)/outer.width + (inner.width-outer.width)/outer.width
-		const y = -(inner.y-outer.y)/outer.height / 2+ (inner.height-outer.height)/outer.height
+		const dx = (inner.x+inner.width/2 - (outer.x+outer.width/2))*2/outer.width
+		const dy = (inner.y+inner.height/2 - (outer.y+outer.height/2))*2/outer.height
+
+
+		const s = Math.max(inner.width/outer.width, inner.height/outer.height)
+
 		return {
-			x:x||0,
-			y:y||0,
+			dx:dx,
+			dy:dy,
+			sx:s,
+			sy:s,
 		}
 	}, combine({
 		inner: screenCropInner,
@@ -584,14 +590,7 @@
 	const normLength = L.normalize((o) => {
 		return L.modify(L.values, R.divide(R.__, L.sum(L.values, o) || 1), o);
 	});
-	const worldGeo = atom({
-			vertices: [],
-			edges: [],
-			faces: [], 
-			masks: [
-			],
-			labels: [],
-	});
+	const worldGeo = atom(toGeo(parseObj(objData.torus)));
 	const sunLightDir = atom({
 		pos: { x: 0, y: 0, z: -100 },
 		dir: { x: -1, y: 0.8, z: 0.5 },
@@ -795,7 +794,8 @@
 			z: v1.z / camera.eye.sz,
 		};
 		const projection = [
-      		M.makeTranslate(cropMovement.x, -cropMovement.y, 0),
+      		M.makeScale(Math.min(cropMovement.sx, cropMovement.sy), Math.min(cropMovement.sx, cropMovement.sy), Math.min(cropMovement.sx, cropMovement.sy)),
+      		M.makeTranslate(cropMovement.dx, -cropMovement.dy, 0),
 			M.blendProjections(
             M.makePerspective(camera.fov / Math.PI * 180, 1/camera.aspectRatio * 1/screenAspect, camera.clip.near,camera.clip.far),
             M.makeOrthographic(camera.fov / Math.PI * 180, 1/camera.aspectRatio * 1/screenAspect, camera.clip.near,camera.clip.far),
@@ -1848,7 +1848,7 @@
 
         const drawLine3D = S.interleavedStrip3D(regl, roundLineGeo)
         const drawFace3D = S.makeColorShader(regl)
-        var reglCamera = regl({
+        const reglCamera = regl({
             context: {
               view: ({tick, viewportWidth}) => {
 
@@ -1874,7 +1874,8 @@
               },
               projection: ({viewportWidth, viewportHeight}) => {
               	return [
-              		M.makeTranslate(cropMovement.value.x, cropMovement.value.y, 0),
+              		M.makeTranslate(cropMovement.value.dx, cropMovement.value.dy, 0),
+              		M.makeScale(Math.min(cropMovement.value.sx, cropMovement.value.sy), Math.min(cropMovement.value.sx, cropMovement.value.sy), Math.min(cropMovement.value.sx, cropMovement.value.sy)),
 	              	M.blendProjections(
 	                M.makePerspective(cameraFoVDeg.value, viewportWidth/viewportHeight, cameraClipNear.value, cameraClipFar.value),
 	                M.makeOrthographic(cameraFoVDeg.value, viewportWidth/viewportHeight, cameraClipNear.value, cameraClipFar.value),
@@ -1884,6 +1885,72 @@
 	        },
 
               viewport: () => ({ x: 0, y: 0, width: reglCanvas.width, height: reglCanvas.height }),
+
+              viewNormal: () => {
+                const m = [
+                  M.makeRotateX(-L.getInverse(
+						lensRadToDegree,
+						cameraEyeRotX.value,
+					)),
+                  M.makeRotateY(-L.getInverse(
+						lensRadToDegree,
+						cameraEyeRotY.value,
+					)),
+                  M.makeRotateX(-L.getInverse(
+						lensRadToDegree,
+						cameraEyeRotZ.value,
+					)),
+                ].reduce(M.matMulMat)
+
+                return [
+                	m[0], m[1], m[2],
+                	m[4], m[5], m[6],
+                	m[8], m[9], m[10]
+                ]
+              },
+            },
+
+            uniforms: {
+              view: regl.context('view'),
+              projection: regl.context('projection'),
+              viewport: regl.context('viewport'),
+              viewNormal: regl.context('viewNormal'),
+            }
+          })
+
+        const reglAxisCamera = regl({
+            context: {
+              view: ({tick, viewportWidth}) => {
+
+                return [
+
+                  M.makeRotateX(-L.getInverse(
+						lensRadToDegree,
+						cameraEyeRotX.value,
+					)),
+                  M.makeRotateY(-L.getInverse(
+						lensRadToDegree,
+						cameraEyeRotY.value,
+					)),
+                  M.makeRotateX(-L.getInverse(
+						lensRadToDegree,
+						cameraEyeRotZ.value,
+					)),
+                ].reduce(M.matMulMat)
+              },
+              projection: ({viewportWidth, viewportHeight}) => {
+				const marginX = (viewportHeight/10 / viewportWidth) * 2
+				const marginY = (viewportHeight/10 / viewportHeight) * 2
+              	return [
+              		M.makeTranslate(marginX, marginY, 0),
+              		M.makeTranslate(-1, -1, 0),
+              		M.makeScale(Math.min(cropMovement.value.sx, cropMovement.value.sy), Math.min(cropMovement.value.sx, cropMovement.value.sy), Math.min(cropMovement.value.sx, cropMovement.value.sy)),
+	                M.makePerspective(120, viewportWidth/viewportHeight, cameraClipNear.value, cameraClipFar.value),
+                    M.makeTranslate(-0,0,-5),
+	            ].reduce(M.matMulMat)
+	        },
+
+              viewport: () => ({ x: 0, y: 0, width: Math.max(reglCanvas.width, reglCanvas.height), height: Math.max(reglCanvas.width, reglCanvas.height)/reglCanvas.width*reglCanvas.height }),
 
               viewNormal: () => {
                 const m = [
@@ -2242,32 +2309,6 @@
 	            	}
 	            }, arrowDrawers)
 
-	            if(showOrigin.value) {
-
-		            axisDrawer({
-			              segments: axisMeshTip,
-			              model: identitiy4x4,
-			              color: [0.4,0.4,0.4,1],
-			              width: strokeWidthFg.value * window.devicePixelRatio * 2,
-			              depth: false,
-			              depthFunc: 'gequal',
-			              cullEnabled: false,
-			              modelMatrixNormal: identity3x3,
-			              depthOffsetFactor: strokeWidthFg.value,
-			         })
-
-		            drawLine3D({
-			              segments: axisMesh,
-			              model: identitiy4x4,
-			              color: [0.4,0.4,0.4,1],
-			              width: strokeWidthFg.value * window.devicePixelRatio * 2,
-			              depth: false,
-			              depthFunc: 'gequal',
-			              cullEnabled: false,
-			              modelMatrixNormal: identity3x3,
-			              depthOffsetFactor: strokeWidthFg.value,
-			         })
-	            }
 	           
 	            drawLine3D({
 	              segments: reglVertexMesh,
@@ -2278,6 +2319,35 @@
 	              depthOffsetFactor: 0,
 	            })
 	        })
+
+
+	            if(showOrigin.value) {
+					reglAxisCamera(() => {
+		            axisDrawer({
+			              segments: axisMeshTip,
+			              model: identitiy4x4,
+			              color: [0.4,0.4,0.4,1],
+			              width: 2 * window.devicePixelRatio * 2,
+			              depth: false,
+			              depthFunc: 'gequal',
+			              cullEnabled: false,
+			              modelMatrixNormal: identity3x3,
+			              depthOffsetFactor: 2,
+			         })
+
+		            drawLine3D({
+			              segments: axisMesh,
+			              model: identitiy4x4,
+			              color: [0.4,0.4,0.4,1],
+			              width: 2 * window.devicePixelRatio * 2,
+			              depth: false,
+			              depthFunc: 'gequal',
+			              cullEnabled: false,
+			              modelMatrixNormal: identity3x3,
+			              depthOffsetFactor: 2,
+			         })
+		        })
+	            }
 		})
 
 
@@ -2438,7 +2508,7 @@
 
 </div>
 
-<div class="screen-focus" {@attach bindClientRect(screenCropInner)}
+<div class="screen-target" {@attach bindClientRect(screenCropInner)}
 >{JSON.stringify(screenCropInner.value)}</div>
 
 <div class="fullscreen"
@@ -2831,7 +2901,7 @@
 		box-sizing: border-box;
 	}
 
-	.screen-focus {
+	.screen-target {
 		background: none;
 		grid-area: 1 / 1 / -1 / -2;
 		z-index: 100;
