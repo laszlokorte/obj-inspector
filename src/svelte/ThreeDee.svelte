@@ -6,6 +6,7 @@
 	import * as M from "@svatom/threedee/matrix";
 	import * as S from "@svatom/threedee/shader";
 	import createREGL from 'regl'
+	import {untrack} from 'svelte'
 	import {parseColor} from './colors'
 	import CamOptions from './CamOptions.svelte'
 
@@ -274,6 +275,45 @@
 	);
 	const clientWidth = view(["size", "x"], screen);
 	const clientHeight = view(["size", "y"], screen);
+
+	const screenCrop = atom({
+		inner: {},
+		outer: {}
+	})
+
+	function bindClientRect(atom) {
+		return (el) => {
+			return  untrack(() => {
+			atom.value =  el.getBoundingClientRect()
+
+			const resizeObserver = new ResizeObserver((entries) => {
+			  	atom.value =  el.getBoundingClientRect()
+			});
+
+			resizeObserver.observe(el);
+
+			return () => {
+				resizeObserver.unobserve(el);
+			}
+			  })
+		}
+	}
+
+	const screenCropInner  = view(["inner", L.props("x","y","width","height"),L.defaults({})], screenCrop);
+	const screenCropOuter  = view(["outer", L.props("x","y","width","height"),L.defaults({})], screenCrop);
+
+	const cropMovement = read(({inner, outer}) => {
+		const x = (inner.x-outer.x)/outer.width + (inner.width-outer.width)/outer.width
+		const y = -(inner.y-outer.y)/outer.height / 2+ (inner.height-outer.height)/outer.height
+		return {
+			x:x||0,
+			y:y||0,
+		}
+	}, combine({
+		inner: screenCropInner,
+		outer: screenCropOuter,
+	}))
+
 
 	const debugRect = view(
 		[
@@ -706,7 +746,7 @@
 			),
 		);
 
-	const fastCameraTransform = (v, camera, screenAspect) => {
+	const fastCameraTransform = (v, camera, screenAspect, cropMovement) => {
 		const v5 = {
 			x: v.x + camera.offset.x - camera.eye.tx,
 			y: v.y + camera.offset.y - camera.eye.ty,
@@ -754,8 +794,9 @@
 			y: v1.y / camera.eye.sy,
 			z: v1.z / camera.eye.sz,
 		};
-
-		const projection = [M.blendProjections(
+		const projection = [
+      		M.makeTranslate(cropMovement.x, -cropMovement.y, 0),
+			M.blendProjections(
             M.makePerspective(camera.fov / Math.PI * 180, 1/camera.aspectRatio * 1/screenAspect, camera.clip.near,camera.clip.far),
             M.makeOrthographic(camera.fov / Math.PI * 180, 1/camera.aspectRatio * 1/screenAspect, camera.clip.near,camera.clip.far),
             camera.orthogonality
@@ -810,7 +851,7 @@
 	);
 
 	const ndcGeoFast = view(
-		({ geo, camera, transform, screenAspect }) => {
+		({ geo, camera, transform, screenAspect, cropMovement }) => {
 			const t = L.compose(cameraTransform(camera, screenAspect));
 
 			return {
@@ -820,6 +861,7 @@
 						fastMatrixTransform(v, transform),
 						camera,
 						screenAspect,
+						cropMovement
 					);
 
 					return r;
@@ -830,7 +872,9 @@
 			geo: worldGeo,
 			transform: worldTransform,
 			camera,
+			screen,
 			screenAspect,
+			cropMovement
 		}),
 	);
 
@@ -1390,13 +1434,14 @@
 	);
 	const pointerDelta = view(L.props("dx", "dy"), pointer);
 
-	const arrowKeys = atom({
+	const KEYMAP = {
 		Shift: false,
 		ArrowLeft: false,
 		ArrowRight: false,
 		ArrowDown: false,
 		ArrowUp: false,
-	});
+	}
+	const arrowKeys = atom(KEYMAP);
 
 	const arrowDirection = view((map) => {
 		const dx = (map.ArrowLeft ? -1 : 0) + (map.ArrowRight ? 1 : 0);
@@ -1483,7 +1528,7 @@
 		vertex: false,
 		ndcCube: false,
 		screenTriangle: false,
-		origin: false,
+		origin: true,
 	});
 	const showSvg = view("svg", debugLabels);
 	const showOrigin = view("origin", debugLabels);
@@ -1736,8 +1781,36 @@
 	  }
 	}
 
+	function circleTipGeometry(size, resolution) {
+	  return (regl) => {
+	    const instanceRoundRound = [
+	        ];
+	        // Add the right cap.
+	        for (let step = 0; step < resolution*2; step++) {
+	          const theta0 = (3 * Math.PI) / 2 + ((step + 0) * Math.PI) / resolution;
+	          const theta1 = (3 * Math.PI) / 2 + ((step + 1) * Math.PI) / resolution;
+	          instanceRoundRound.push([-size*0.5, 0, 1]);
+	          instanceRoundRound.push([
+	            size*0.5 * Math.cos(theta0),
+	            size*0.5 * Math.sin(theta0),
+	            1
+	          ]);
+	          instanceRoundRound.push([
+	            size*0.5 * Math.cos(theta1),
+	            size*0.5 * Math.sin(theta1),
+	            1
+	          ]);
+	        }
+	        return {
+	          buffer: regl.buffer(instanceRoundRound),
+	          count: instanceRoundRound.length
+	        };
+	  }
+	      
+	}
 
-	const axisArrow = S.arrowGeometry(4);
+
+	const axisArrow = circleTipGeometry(4, 10);
 	const arrowGeometries = {
 		"CH.ifa.draw.figures.ArrowTip": S.arrowGeometry(4),
 		"de.renew.gui.CircleDecoration": S.circleCapGeometry(5, 10),
@@ -1777,7 +1850,8 @@
         const drawFace3D = S.makeColorShader(regl)
         var reglCamera = regl({
             context: {
-              view: ({tick}) => {
+              view: ({tick, viewportWidth}) => {
+
                 return [
                    M.makeTranslate(-cameraOffsetX.value,cameraOffsetY.value,-cameraOffsetZ.value),
 
@@ -1798,13 +1872,16 @@
                    M.makeTranslate(-cameraEyePosX.value,cameraEyePosY.value,-cameraEyePosZ.value),
                 ].reduce(M.matMulMat)
               },
-              projection: ({viewportWidth, viewportHeight}) =>
-              [M.blendProjections(
-                M.makePerspective(cameraFoVDeg.value, viewportWidth/viewportHeight, cameraClipNear.value, cameraClipFar.value),
-                M.makeOrthographic(cameraFoVDeg.value, viewportWidth/viewportHeight, cameraClipNear.value, cameraClipFar.value),
-                cameraOrtho.value
-              ),
-            ].reduce(M.matMulMat),
+              projection: ({viewportWidth, viewportHeight}) => {
+              	return [
+              		M.makeTranslate(cropMovement.value.x, cropMovement.value.y, 0),
+	              	M.blendProjections(
+	                M.makePerspective(cameraFoVDeg.value, viewportWidth/viewportHeight, cameraClipNear.value, cameraClipFar.value),
+	                M.makeOrthographic(cameraFoVDeg.value, viewportWidth/viewportHeight, cameraClipNear.value, cameraClipFar.value),
+	                cameraOrtho.value
+	              ),
+	            ].reduce(M.matMulMat)
+	        },
 
               viewport: () => ({ x: 0, y: 0, width: reglCanvas.width, height: reglCanvas.height }),
 
@@ -1855,7 +1932,7 @@
 		}), arrowGeometries)
 
 		const axisMeshTip = ({
-			points: regl.buffer([0,0,0,1.4,0,0, 0,0,0,0,1.2,0, 0,0,0,0,0,1]),
+			points: regl.buffer([1.4,0,0,1.4,0,0, 0,1.2,0,0,1.2,0, 0,0,1,0,0,1]),
         	normals: regl.buffer([0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0]),
         	shortenings: regl.buffer([0,0,0,0,0,0]),
         	count: 3
@@ -1864,7 +1941,7 @@
 		const axisMesh = ({
 			points: regl.buffer([0,0,0,1.4,0,0, 0,0,0,0,1.2,0, 0,0,0,0,0,1]),
         	normals: regl.buffer([0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0]),
-        	shortenings: regl.buffer([1.5,6,1.5,6,1.5,6]),
+        	shortenings: regl.buffer([1.5,3,1.5,3,1.5,3]),
         	count: 3
 		})
 
@@ -2166,7 +2243,7 @@
 	            }, arrowDrawers)
 
 	            if(showOrigin.value) {
-	            	
+
 		            axisDrawer({
 			              segments: axisMeshTip,
 			              model: identitiy4x4,
@@ -2263,7 +2340,7 @@
 	};
 </script>
 
-<div		class={[
+<div class={[
 				"screen",
 				"drop-target",
 				{
@@ -2361,12 +2438,16 @@
 
 </div>
 
-<div class="fullscreen">
-	{#if showCanvas.value}
-		<div class="viewportContainer" {@attach renderGL}></div>
-	{/if}
-	<svg
+<div class="screen-focus" {@attach bindClientRect(screenCropInner)}
+>{JSON.stringify(screenCropInner.value)}</div>
 
+<div class="fullscreen"
+ 		>
+	{#if showCanvas.value}
+		<div class="viewportContainer"  {@attach renderGL}></div>
+	{/if}
+	<svg 
+	 {@attach bindClientRect(screenCropOuter)}
 		role="button"
 		data-hide-cw={hideCW.value}
 		data-hide-ccw={hideCCW.value}
@@ -2400,12 +2481,16 @@
 			}
 		}}
 		onkeydown={(evt) => {
-			evt.preventDefault();
-			keyDown.value = evt.key;
+			if(Object.hasOwnProperty.call(KEYMAP, evt.key)) {
+				evt.preventDefault();
+				keyDown.value = evt.key;
+			}
 		}}
 		onkeyup={(evt) => {
-			evt.preventDefault();
-			keyUp.value = evt.key;
+			if(Object.hasOwnProperty.call(KEYMAP, evt.key)) {
+				evt.preventDefault();
+				keyUp.value = evt.key;
+			}
 		}}
 		onwheel={(evt) => {
 			evt.preventDefault();
@@ -2713,7 +2798,7 @@
 		touch-action: none;
 		overscroll-behavior: contain;
 		grid-area: 1/1/-1/-1;
-		outline: none;
+		box-sizing: border-box;
 	}
 
 	.viewport:focus,
@@ -2725,6 +2810,7 @@
 	.viewportContainer {
 		background: #fff;
 		display: contents;
+		box-sizing: border-box;
 	}
 
 	.viewport.vector {
@@ -2742,12 +2828,22 @@
 		display: grid;
 		grid-template: auto 1fr auto / auto 1fr auto;
 		z-index: 10;
+		box-sizing: border-box;
+	}
+
+	.screen-focus {
+		background: none;
+		grid-area: 1 / 1 / -1 / -2;
+		z-index: 100;
+		opacity: 0.2;
+		pointer-events: none;
+		color: transparent;
 	}
 
 	.fullscreen {
 		grid-area: 1 / 1 / -1 / -1;
 		display: grid;
-		grid-template: 1fr / 1fr;
+		grid-template: 100% / 100%;
 	}
 
 	.overlay {
@@ -2758,7 +2854,7 @@
 		max-height: 100%;
 	}
 	.overlay-top {
-		grid-column: 1 / -1;
+		grid-column: -2 / -1;
 		grid-row: 1 / span 1;
 		display: flex;
 		gap: 1ex;
